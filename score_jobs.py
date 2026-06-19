@@ -77,36 +77,44 @@ Job to score:
 
 Score how well this job fits the candidate (0 = irrelevant, 10 = excellent fit).
 Return JSON only with this exact shape:
-{{"score": <number 0-10>, "reason": "<one short sentence>"}}"""
+{{"score": <number 0-10>, "reason": "<one short sentence>", "summary": "<2-3 sentences>"}}
+
+Also write a "summary" field: 2-3 short sentences in plain English describing what this role
+actually involves day-to-day, written for someone quickly scrolling job listings on their phone.
+Then state in one final sentence why it fits this candidate's background specifically.
+No corporate jargon. No restating the job title. Write like you're texting a friend about a job
+you found for them. Maximum 280 characters total for the summary field.
+
+Keep "reason" as one short sentence for logging — do not remove or merge it with summary."""
 
 
 def _parse_score_response(content):
-    """Extract score and reason from the model response."""
+    """Extract score, reason, and summary from the model response."""
     content = content.strip()
 
+    def _extract(data):
+        score = max(0, min(10, float(data["score"])))
+        reason = str(data.get("reason", "")).strip() or "No reason given"
+        summary = str(data.get("summary", "")).strip()
+        return score, reason, summary
+
     try:
-        data = json.loads(content)
-        score = float(data["score"])
-        reason = str(data.get("reason", "")).strip()
-        score = max(0, min(10, score))
-        return score, reason or "No reason given"
+        return _extract(json.loads(content))
     except (json.JSONDecodeError, KeyError, TypeError, ValueError):
         match = re.search(r"\{.*\}", content, re.DOTALL)
         if match:
             try:
-                data = json.loads(match.group())
-                score = max(0, min(10, float(data["score"])))
-                return score, str(data.get("reason", "No reason given")).strip()
+                return _extract(json.loads(match.group()))
             except (json.JSONDecodeError, KeyError, TypeError, ValueError):
                 pass
 
-    return None, "Could not parse LLM response"
+    return None, "Could not parse LLM response", ""
 
 
 def score_job(job, api_key, profile_summary: str):
     """
-    Score a single job. Returns (score, reason).
-    On failure, returns (None, error_message).
+    Score a single job. Returns (score, reason, summary).
+    On failure, returns (None, error_message, "").
     """
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -128,15 +136,15 @@ def score_job(job, api_key, profile_summary: str):
     response = requests.post(DEEPSEEK_URL, headers=headers, json=payload, timeout=60)
 
     if response.status_code == 401:
-        return None, "Invalid DeepSeek API key"
+        return None, "Invalid DeepSeek API key", ""
 
     if not response.ok:
-        return None, f"DeepSeek API error (HTTP {response.status_code})"
+        return None, f"DeepSeek API error (HTTP {response.status_code})", ""
 
     try:
         content = response.json()["choices"][0]["message"]["content"]
     except (KeyError, IndexError, json.JSONDecodeError):
-        return None, "Unexpected response from DeepSeek"
+        return None, "Unexpected response from DeepSeek", ""
 
     return _parse_score_response(content)
 
@@ -162,15 +170,17 @@ def score_jobs(jobs, api_key=None, max_jobs=MAX_JOBS_TO_SCORE, profile: UserProf
             time.sleep(REQUEST_DELAY_SECONDS)
 
         title = job.get("title", "Untitled role")
-        score, reason = score_job(job, api_key, profile_summary)
+        score, reason, summary = score_job(job, api_key, profile_summary)
 
         if score is None:
             print(f"  Failed to score '{title}': {reason}")
             job["_score"] = None
             job["_score_reason"] = reason
+            job["_score_summary"] = ""
         else:
             job["_score"] = score
             job["_score_reason"] = reason
+            job["_score_summary"] = summary
             print(f"  {score:.0f}/10 — {title}")
 
     scored = [j for j in to_score if j.get("_score") is not None]

@@ -12,42 +12,11 @@ from dotenv import load_dotenv
 
 TELEGRAM_API_BASE = "https://api.telegram.org/bot{token}/sendMessage"
 MAX_MESSAGE_LENGTH = 4096
+MAX_SAFE_LENGTH = 4000
 MAX_JOBS_IN_DIGEST = 20
+MAX_JOBS_PER_SPLIT = 5
 MIN_SCORE_TO_SEND = 4
-JD_SNIPPET_MAX = 380
-COMPANY_SNIPPET_MAX = 220
-
-
-def _strip_html(text: str) -> str:
-    if not text:
-        return ""
-    clean = re.sub(r"<[^>]+>", " ", text)
-    return re.sub(r"\s+", " ", clean).strip()
-
-
-def _truncate(text: str, limit: int) -> str:
-    if len(text) <= limit:
-        return text
-    cut = text[:limit].rsplit(" ", 1)[0]
-    return f"{cut}…"
-
-
-def _job_description_snippet(job: dict) -> str:
-    return _truncate(_strip_html(job.get("description", "")), JD_SNIPPET_MAX)
-
-
-def _company_about_snippet(job: dict) -> str:
-    company = job.get("company", {}).get("display_name", "Unknown company")
-    description = _strip_html(job.get("description", ""))
-    if not description:
-        return company
-
-    company_lower = company.lower()
-    for sentence in re.split(r"(?<=[.!?])\s+", description):
-        if company_lower in sentence.lower():
-            return _truncate(sentence.strip(), COMPANY_SNIPPET_MAX)
-
-    return _truncate(f"{company}. {description}", COMPANY_SNIPPET_MAX)
+JOB_DIVIDER = "━━━━━━━━━━━━━━━━━━━━"
 
 
 def load_telegram_config():
@@ -58,67 +27,115 @@ def load_telegram_config():
     return token, chat_id
 
 
+def _sanitize_markdown(text: str) -> str:
+    """Strip characters that break Telegram legacy Markdown in dynamic fields."""
+    if not text:
+        return ""
+    return (
+        text.replace("\\", "")
+        .replace("*", "×")
+        .replace("_", " ")
+        .replace("`", "'")
+        .replace("[", "(")
+        .replace("]", ")")
+    )
+
+
 def format_salary(job):
-    """Return a short salary string for the digest."""
+    """Return a clean salary string for the digest."""
     salary_min = job.get("salary_min")
     salary_max = job.get("salary_max")
 
-    if salary_min and salary_max:
-        return f"£{int(salary_min):,}–£{int(salary_max):,}"
-    if salary_min:
+    if salary_min is not None and salary_max is not None:
+        min_val = int(salary_min)
+        max_val = int(salary_max)
+        if min_val == max_val:
+            return f"£{min_val:,}"
+        return f"£{min_val:,}–£{max_val:,}"
+    if salary_min is not None:
         return f"from £{int(salary_min):,}"
-    if salary_max:
+    if salary_max is not None:
         return f"up to £{int(salary_max):,}"
-    return "Salary not listed"
+    return "Salary not specified"
+
+
+def _job_summary(job: dict) -> str:
+    """Punchy 2-3 line summary from scoring; fall back to reason if missing."""
+    summary = (job.get("_score_summary") or "").strip()
+    if summary:
+        return _sanitize_markdown(summary)
+    reason = (job.get("_score_reason") or "").strip()
+    if reason:
+        return _sanitize_markdown(reason)
+    return "No summary available for this role."
+
+
+def _build_doc_links(job: dict) -> str | None:
+    """Inline Markdown links for CV and cover letter; omit missing URLs."""
+    parts = []
+    cv_url = (job.get("tailored_cv_url") or "").strip()
+    cl_url = (job.get("cover_letter_url") or "").strip()
+    if cv_url:
+        parts.append(f"📄 [Tailored CV]({cv_url})")
+    if cl_url:
+        parts.append(f"✉️ [Cover Letter]({cl_url})")
+    return "  ·  ".join(parts) if parts else None
 
 
 def format_job_block(job, index):
-    """Format one job as a plain-text block."""
-    title = job.get("title", "Untitled role")
-    company = job.get("company", {}).get("display_name", "Unknown company")
-    location = job.get("location", {}).get("display_name", "Unknown location")
+    """Format one job as a Telegram Markdown block."""
+    title = _sanitize_markdown(job.get("title", "Untitled role"))
+    company = _sanitize_markdown(
+        job.get("company", {}).get("display_name", "Unknown company")
+    )
+    location = _sanitize_markdown(
+        job.get("location", {}).get("display_name", "Unknown location")
+    )
     salary = format_salary(job)
-    url = job.get("redirect_url", "")
+    apply_url = (job.get("redirect_url") or "").strip()
     score = job.get("_score")
-    reason = job.get("_score_reason", "")
+    summary = _job_summary(job)
 
     if score is not None:
-        header = f"{index}. [{score:.0f}/10] {title}"
+        header = f"*{index}. {title}*  `{int(score)}/10`"
     else:
-        header = f"{index}. {title}"
+        header = f"*{index}. {title}*"
 
     lines = [
         header,
-        f"   {company} · {location} · {salary}",
+        f"🏢 {company} · 📍 {location}",
+        f"💰 {salary}",
+        "",
+        summary,
     ]
 
-    if reason:
-        lines.append(f"   {reason}")
+    doc_links = _build_doc_links(job)
+    if doc_links:
+        lines.extend(["", doc_links])
 
-    about = _company_about_snippet(job)
-    if about:
-        lines.append(f"   About company: {about}")
+    if apply_url:
+        if doc_links:
+            lines.append(f"🔗 [View & Apply]({apply_url})")
+        else:
+            lines.extend(["", f"🔗 [View & Apply]({apply_url})"])
 
-    jd = _job_description_snippet(job)
-    if jd:
-        lines.append(f"   Role: {jd}")
-
-    cv_url = job.get("tailored_cv_url", "")
-    if cv_url:
-        lines.append(f"   📄 Tailored CV: {cv_url}")
-    elif job.get("_cv_telegram_sent"):
-        lines.append("   📄 Tailored CV: see file above")
-
-    cl_url = job.get("cover_letter_url", "")
-    if cl_url:
-        lines.append(f"   ✉️ Cover letter: {cl_url}")
-    elif job.get("_cover_letter_telegram_sent"):
-        lines.append("   ✉️ Cover letter: see file above")
-
-    if url:
-        lines.append(f"   {url}")
-
+    lines.extend(["", JOB_DIVIDER])
     return "\n".join(lines)
+
+
+def _digest_header(selected_count: int, digest_title: str | None, part: int | None, total_parts: int | None) -> str:
+    """Build the digest header with optional (1/N) split indicator."""
+    if digest_title:
+        title_text = digest_title
+    else:
+        today = datetime.now().strftime("%d %b %Y")
+        title_text = f"UK Jobs Digest — {today}"
+
+    if part is not None and total_parts is not None and total_parts > 1:
+        title_text = f"{title_text} ({part}/{total_parts})"
+
+    match_line = f"{selected_count} match{'es' if selected_count != 1 else ''}"
+    return f"🇬🇧 *{title_text}*\n{match_line}\n{JOB_DIVIDER}"
 
 
 def select_jobs_for_digest(jobs, daily_top_n: bool = False):
@@ -138,53 +155,77 @@ def select_jobs_for_digest(jobs, daily_top_n: bool = False):
     return chosen[:MAX_JOBS_IN_DIGEST]
 
 
+def _assemble_message(header: str, blocks: list[str]) -> str:
+    """Join header and job blocks into one message string."""
+    body = "\n\n".join(blocks)
+    return f"{header}\n\n{body}" if blocks else header
+
+
+def _chunk_blocks(blocks: list[str], header: str) -> list[list[str]]:
+    """
+    Split job blocks into message-sized chunks.
+    Prefer max MAX_JOBS_PER_SPLIT jobs per message; shrink chunks if still too long.
+    """
+    if not blocks:
+        return [[]]
+
+    chunks: list[list[str]] = []
+    current: list[str] = []
+
+    for block in blocks:
+        candidate_blocks = current + [block]
+        if len(current) >= MAX_JOBS_PER_SPLIT or (
+            current and len(_assemble_message(header, candidate_blocks)) > MAX_SAFE_LENGTH
+        ):
+            chunks.append(current)
+            current = [block]
+        else:
+            current = candidate_blocks
+
+    if current:
+        chunks.append(current)
+
+    # If any chunk still exceeds the limit, split down to single-job messages.
+    final: list[list[str]] = []
+    for chunk in chunks:
+        if len(_assemble_message(header, chunk)) <= MAX_SAFE_LENGTH:
+            final.append(chunk)
+            continue
+        for block in chunk:
+            final.append([block])
+    return final or [[]]
+
+
 def build_digest_messages(jobs, empty_reason=None, digest_title=None, daily_top_n: bool = False):
     """
     Build one or more Telegram messages from a job list.
-    Splits automatically if the text exceeds Telegram's 4096 character limit.
+    Splits when length exceeds MAX_SAFE_LENGTH (max 5 jobs per message).
     """
     selected = select_jobs_for_digest(jobs, daily_top_n=daily_top_n)
-    today = datetime.now().strftime("%d %b %Y")
-    title = digest_title or f"UK Jobs Digest — {today}"
 
     if not selected:
         if empty_reason:
-            body = empty_reason
+            body = _sanitize_markdown(empty_reason)
         else:
             body = "No strong new matches today. Check again tomorrow."
-        return [f"{title}\n\n{body}"]
-
-    header = (
-        f"{title}\n"
-        f"{len(selected)} match{'es' if len(selected) != 1 else ''}\n"
-    )
+        title = digest_title or f"UK Jobs — {datetime.now().strftime('%d %b %Y')}"
+        return [f"🇬🇧 *{title}*\n\n{body}"]
 
     blocks = [format_job_block(job, i + 1) for i, job in enumerate(selected)]
-    body = "\n\n".join(blocks)
-    full_text = header + "\n" + body
+    base_header = _digest_header(len(selected), digest_title, None, None)
 
-    if len(full_text) <= MAX_MESSAGE_LENGTH:
-        return [full_text]
+    if len(_assemble_message(base_header, blocks)) <= MAX_SAFE_LENGTH:
+        return [_assemble_message(base_header, blocks)]
 
+    chunks = _chunk_blocks(blocks, base_header)
+    total_parts = len(chunks)
     messages = []
-    current = header + "\n"
-    index = 1
+    job_offset = 0
 
-    for job in selected:
-        block = format_job_block(job, index)
-        candidate = current + ("\n\n" if current.strip() else "") + block
-
-        if len(candidate) > MAX_MESSAGE_LENGTH:
-            if current.strip():
-                messages.append(current.rstrip())
-            current = f"UK Jobs Digest (continued)\n\n{block}"
-        else:
-            current = candidate
-
-        index += 1
-
-    if current.strip():
-        messages.append(current.rstrip())
+    for part_idx, chunk in enumerate(chunks, start=1):
+        header = _digest_header(len(selected), digest_title, part_idx, total_parts)
+        messages.append(_assemble_message(header, chunk))
+        job_offset += len(chunk)
 
     return messages
 
@@ -195,6 +236,7 @@ def send_telegram_message(text, token, chat_id):
     payload = {
         "chat_id": chat_id,
         "text": text,
+        "parse_mode": "Markdown",
         "disable_web_page_preview": True,
     }
 
