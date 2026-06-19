@@ -19,6 +19,23 @@ MAX_JOBS_TO_SCORE = 50
 DESCRIPTION_LIMIT = 900
 REQUEST_DELAY_SECONDS = 0.5
 
+# These roles require formal UK government security vetting that takes months and
+# cannot be obtained through a job application. No resume tailoring can make a
+# candidate eligible for these roles without an existing clearance.
+HARD_DISQUALIFIERS = [
+    "sc cleared",
+    "sc clearance",
+    "security clearance required",
+    "dv cleared",
+    "dv clearance",
+    "developed vetting",
+    "must hold active clearance",
+    "eligible for sc clearance",
+    "nppv",
+    "ctc cleared",
+    "counter terrorist check",
+]
+
 PROFILE_SUMMARY = load_profile().llm_summary()
 
 
@@ -34,6 +51,39 @@ def _strip_html(text):
         return ""
     clean = re.sub(r"<[^>]+>", " ", text)
     return re.sub(r"\s+", " ", clean).strip()
+
+
+def _job_search_text(job) -> str:
+    """Lowercase title + description for disqualifier matching."""
+    title = (job.get("title") or "").strip().lower()
+    description = _strip_html(job.get("description", "")).strip().lower()
+    return f"{title} {description}"
+
+
+def is_clearance_disqualified(job) -> bool:
+    """Return True if job requires UK government security clearance."""
+    text = _job_search_text(job)
+    return any(disqualifier in text for disqualifier in HARD_DISQUALIFIERS)
+
+
+def filter_clearance_disqualified(jobs: list) -> tuple[list, int]:
+    """Remove clearance-required jobs before scoring. Returns (eligible, skipped_count)."""
+    eligible = []
+    skipped = 0
+
+    for job in jobs:
+        if is_clearance_disqualified(job):
+            skipped += 1
+            company = (
+                job.get("company", {}).get("display_name", "Unknown")
+                if isinstance(job.get("company"), dict)
+                else job.get("company", "Unknown")
+            )
+            print(f"Skipped (clearance required): {job.get('title', 'Untitled')} at {company}")
+        else:
+            eligible.append(job)
+
+    return eligible, skipped
 
 
 def _build_prompt(job, profile_summary: str):
@@ -140,17 +190,24 @@ def score_job(job, api_key, profile_summary: str):
 def score_jobs(jobs, api_key=None, max_jobs=MAX_JOBS_TO_SCORE, profile: UserProfile | None = None):
     """
     Score up to max_jobs listings. Adds _score and _score_reason to each job.
-    Returns jobs sorted by score (highest first). Unscored jobs go to the end.
+    Returns (jobs_sorted, stats) where stats includes jobs_skipped_clearance.
+    Clearance-disqualified jobs are removed entirely — never scored or digested.
     """
     api_key = api_key or load_api_key()
     profile_summary = profile.llm_summary() if profile else PROFILE_SUMMARY
 
+    eligible, clearance_skipped = filter_clearance_disqualified(jobs)
+    stats = {"jobs_skipped_clearance": clearance_skipped}
+
+    if clearance_skipped:
+        print(f"Clearance filter: {clearance_skipped} job(s) removed before scoring.\n")
+
     if not api_key:
         print("No DEEPSEEK_API_KEY in .env — skipping LLM scoring.")
         print("Get a free key at https://platform.deepseek.com/ and add it to .env\n")
-        return jobs
+        return eligible, stats
 
-    to_score = jobs[:max_jobs]
+    to_score = eligible[:max_jobs]
     print(f"Scoring {len(to_score)} jobs with DeepSeek...\n")
 
     for i, job in enumerate(to_score):
@@ -173,10 +230,10 @@ def score_jobs(jobs, api_key=None, max_jobs=MAX_JOBS_TO_SCORE, profile: UserProf
 
     scored = [j for j in to_score if j.get("_score") is not None]
     unscored = [j for j in to_score if j.get("_score") is None]
-    remainder = jobs[max_jobs:]
+    remainder = eligible[max_jobs:]
 
     scored.sort(key=lambda j: j["_score"], reverse=True)
-    return scored + unscored + remainder
+    return scored + unscored + remainder, stats
 
 
 if __name__ == "__main__":
@@ -195,7 +252,7 @@ if __name__ == "__main__":
     if not kept:
         print("No new jobs to score.")
     else:
-        ranked = score_jobs(kept)
+        ranked, _stats = score_jobs(kept)
         print()
         for job in ranked:
             score = job.get("_score")

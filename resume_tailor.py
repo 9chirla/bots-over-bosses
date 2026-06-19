@@ -119,7 +119,7 @@ below. The output must make a hiring manager pause and read properly —
 not skim and move on.
 
 ═══════════════════════════════════════════════
-THE 10 PROBLEMS YOU MUST FIX IN THIS RESUME:
+THE 11 PROBLEMS YOU MUST FIX IN THIS RESUME:
 ═══════════════════════════════════════════════
 
 PROBLEM 1 — DUPLICATE EMPLOYER, SAME DATES
@@ -205,6 +205,18 @@ the framing to make clear it is part-time/ongoing alongside job
 search. Add "(part-time)" in brackets after the title. This
 prevents the hiring manager from assuming this is the main job.
 
+PROBLEM 11 — JD PHRASE MIRRORING
+If the original candidate experience is meaningfully different in
+DOMAIN from what the JD describes (e.g. candidate did engagement
+tracking, JD wants system migration validation), do not force
+identical language. Use honest framing instead: name what the
+candidate actually did, and let the transferable skill speak for
+itself, rather than relabelling the activity to sound like the JD's
+exact responsibility. A reconciliation check on engagement records is
+not the same discipline as source-to-target migration validation —
+describe it honestly as the former, and let the hiring manager draw
+the (legitimate) connection rather than asserting equivalence.
+
 ═══════════════════════════════════════════════
 ATS KEYWORD RULES (apply alongside the above):
 ═══════════════════════════════════════════════
@@ -237,6 +249,31 @@ WRITING RULES — MUST FOLLOW ALL OF THESE:
 - Job titles at employers: never change them
 - Dates: never change them
 - Do not invent percentages or figures that are not in the original
+
+CRITICAL — AVOID JD MIRRORING:
+Do not copy 3+ consecutive words directly from the job description
+into the resume, even if rephrased elsewhere. Do not reuse a specific
+number, percentage, or target figure from the JD unless that exact
+figure already existed in the candidate's original resume before this
+rewrite. If the JD states a target like '99.9% accuracy' and the
+candidate's original resume had no such figure, do NOT invent one to
+match it — this is fabrication, not tailoring, and experienced hiring
+managers recognise this pattern immediately as it is the single
+biggest tell of an AI-generated, reverse-engineered CV.
+
+Test before finalising: read the job description and the rewritten
+resume side by side. If 3 or more bullets independently echo the same
+sequence of words or the same structure as the JD's responsibility
+list (e.g. JD says 'design and execute data validation checks' and the
+resume says 'designed and executed data validation checks'), rewrite
+those bullets using different sentence structure and your own framing
+of what the candidate actually did. Mirroring JD structure across
+multiple bullets is a pattern hiring managers are now trained to spot
+— it reads as templated, not as genuine experience.
+
+The goal is alignment in SUBSTANCE (the underlying skill is genuinely
+transferable) without mirroring in SURFACE FORM (identical phrasing,
+identical structure, identical figures).
 
 ═══════════════════════════════════════════════
 OUTPUT FORMAT — EXACT STRUCTURE REQUIRED:
@@ -274,12 +311,18 @@ EDUCATION
 --- ATS NOTES (REMOVE BEFORE SENDING) ---
 Job targeted: [exact title]
 Keywords injected: [keyword → which bullet]
-Problems fixed: [list which of the 10 problems were addressed]
+Problems fixed: [list which of the 11 problems were addressed]
 Bullets rewritten: [original opening → new opening → reason]
 Skills added: [skill → justified by]
 Interview prep flag: [any line that needs the candidate to be ready
 to explain — e.g. "if asked about Power Query, be ready to describe
 the specific dashboards built at UEL"]
+DOMAIN GAP CHECK: [Honest one-line assessment of whether the
+candidate's actual experience is in the same discipline as this job,
+or merely adjacent/transferable. Example: 'Candidate has engagement
+data reconciliation experience, not system migration validation —
+this is an adjacent skill, be ready to address this gap directly in
+any screening call.']
 
 ═══════════════════════════════════════════════
 INPUTS:

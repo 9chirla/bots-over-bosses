@@ -51,6 +51,7 @@ echo "Uploading secrets to $(gh repo view --json nameWithOwner -q .nameWithOwner
 
 set_secret ADZUNA_APP_ID "${ADZUNA_APP_ID:-}"
 set_secret ADZUNA_APP_KEY "${ADZUNA_APP_KEY:-}"
+set_secret REED_API_KEY "${REED_API_KEY:-}"
 set_secret DEEPSEEK_API_KEY "${DEEPSEEK_API_KEY:-}"
 set_secret TELEGRAM_BOT_TOKEN "${TELEGRAM_BOT_TOKEN:-}"
 set_secret TELEGRAM_CHAT_ID "${TELEGRAM_CHAT_ID:-}"

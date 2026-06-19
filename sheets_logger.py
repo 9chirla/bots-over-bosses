@@ -189,3 +189,64 @@ def update_cv_urls(job_id_to_url: dict):
 
     except Exception as exc:
         print(f"Google Sheets CV URL update error: {exc}")
+
+
+RUN_LOG_HEADER = [
+    "date",
+    "jobs_fetched",
+    "jobs_kept",
+    "jobs_ranked",
+    "jobs_sent",
+    "jobs_skipped_clearance",
+    "jobs_skipped_dead_link",
+    "user_email",
+]
+
+
+def _get_run_log_sheet():
+    sheet_id = os.getenv("GOOGLE_SHEETS_ID", "")
+    if not sheet_id:
+        return None
+    client = _get_client()
+    if not client:
+        return None
+    spreadsheet = client.open_by_key(sheet_id)
+    try:
+        return spreadsheet.worksheet("RunLog")
+    except gspread.WorksheetNotFound:
+        ws = spreadsheet.add_worksheet(title="RunLog", rows=1000, cols=len(RUN_LOG_HEADER))
+        ws.append_row(RUN_LOG_HEADER, value_input_option="USER_ENTERED")
+        return ws
+
+
+def log_run_summary(summary: dict, user_email: str | None = None):
+    """Append one pipeline run row to the RunLog tab. Never raises."""
+    if not SHEETS_ENABLED:
+        return
+
+    try:
+        ws = _get_run_log_sheet()
+        if not ws:
+            return
+
+        existing = ws.row_values(1)
+        if not existing:
+            ws.append_row(RUN_LOG_HEADER, value_input_option="USER_ENTERED")
+        elif existing[0] != "date":
+            ws.insert_row(RUN_LOG_HEADER, index=1, value_input_option="USER_ENTERED")
+
+        ws.append_row(
+            [
+                date.today().isoformat(),
+                summary.get("fetched", 0),
+                summary.get("kept", 0),
+                summary.get("ranked", 0),
+                summary.get("sent", 0),
+                summary.get("jobs_skipped_clearance", 0),
+                summary.get("jobs_skipped_dead_link", 0),
+                user_email or "cli",
+            ],
+            value_input_option="USER_ENTERED",
+        )
+    except Exception as exc:
+        print(f"Google Sheets RunLog error: {exc}")
