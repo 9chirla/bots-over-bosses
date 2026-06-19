@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard — UK Job Alerts</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <h1>Your dashboard</h1>
+    <p class="sub" id="welcome">Loading…</p>
+
+    <div id="alert" class="status hidden"></div>
+
+    <div class="card">
+      <h2>Quick actions</h2>
+      <p class="muted">Send a digest to your Telegram now.</p>
+      <div class="actions">
+        <button id="btn-new" type="button">Send new jobs only</button>
+        <button id="btn-top" type="button" class="secondary">Send top matches (include seen jobs)</button>
+      </div>
+      <p id="action-msg" class="muted hidden"></p>
+    </div>
+
+    <div class="card">
+      <h2>Recent digests</h2>
+      <div id="history"><p class="muted">No digests sent yet.</p></div>
+    </div>
+
+    <div class="card">
+      <h2>Edit preferences</h2>
+      <form id="profile-form">
+        <label for="location">Preferred location</label>
+        <input id="location" name="location" required />
+
+        <div class="row">
+          <div>
+            <label for="salary_min">Min salary (£)</label>
+            <input id="salary_min" name="salary_min" type="number" min="15000" />
+          </div>
+          <div>
+            <label for="salary_max">Max salary (£)</label>
+            <input id="salary_max" name="salary_max" type="number" min="15000" />
+          </div>
+        </div>
+
+        <label for="target_titles">Target job titles</label>
+        <input id="target_titles" name="target_titles" />
+
+        <label for="skills">Key skills</label>
+        <input id="skills" name="skills" />
+
+        <label for="education">Education</label>
+        <textarea id="education" name="education"></textarea>
+
+        <label class="check">
+          <input id="remote_ok" name="remote_ok" type="checkbox" />
+          Include UK remote jobs
+        </label>
+
+        <label class="check">
+          <input id="include_track_b" name="include_track_b" type="checkbox" />
+          Include developer / full-stack roles
+        </label>
+
+        <button type="submit">Save changes</button>
+        <p id="form-error" class="error hidden"></p>
+        <p id="form-success" class="success hidden">Profile saved.</p>
+      </form>
+    </div>
+
+    <div class="card" id="telegram-card">
+      <h2>Telegram</h2>
+      <p id="telegram-status" class="muted">Checking connection…</p>
+      <a id="telegram-link" class="telegram-btn hidden" href="#" target="_blank">Reconnect Telegram</a>
+    </div>
+
+    <p class="link-row"><a href="/">← Back to home</a></p>
+  </div>
+
+  <script>
+    const userId = new URLSearchParams(location.search).get("user") || localStorage.getItem("jobalert_user_id");
+    if (!userId) location.href = "/";
+
+    localStorage.setItem("jobalert_user_id", userId);
+
+    function showAlert(text, ok = true) {
+      const el = document.getElementById("alert");
+      el.textContent = text;
+      el.style.background = ok ? "#ecfdf5" : "#fef2f2";
+      el.classList.remove("hidden");
+      setTimeout(() => el.classList.add("hidden"), 5000);
+    }
+
+    function formatDate(iso) {
+      try {
+        return new Date(iso).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
+      } catch { return iso; }
+    }
+
+    function modeLabel(mode) {
+      if (mode === "daily") return "Daily run";
+      if (mode === "top") return "Top matches";
+      return "Manual send";
+    }
+
+    async function loadDashboard() {
+      const res = await fetch(`/api/users/${userId}/profile`);
+      if (!res.ok) { location.href = "/"; return; }
+      const data = await res.json();
+      const p = data.profile;
+      const s = data.status;
+
+      document.getElementById("welcome").innerHTML =
+        `${p.email} &nbsp; ${s.telegram_linked ? '<span class="badge">Telegram connected</span>' : '<span class="badge warn">Telegram not connected</span>'}`;
+
+      document.getElementById("location").value = p.location;
+      document.getElementById("salary_min").value = p.salary_min;
+      document.getElementById("salary_max").value = p.salary_max;
+      document.getElementById("target_titles").value = p.target_titles;
+      document.getElementById("skills").value = p.skills;
+      document.getElementById("education").value = p.education || "";
+      document.getElementById("remote_ok").checked = p.remote_ok;
+      document.getElementById("include_track_b").checked = p.include_track_b;
+
+      const tgStatus = document.getElementById("telegram-status");
+      const tgLink = document.getElementById("telegram-link");
+      if (s.telegram_linked) {
+        tgStatus.textContent = `Connected since ${formatDate(s.telegram_linked_at)}`;
+      } else {
+        tgStatus.textContent = "Not connected — you'll need Telegram to receive digests.";
+        tgLink.href = s.telegram_link || `https://t.me/?start=${userId}`;
+        tgLink.classList.remove("hidden");
+      }
+
+      const histRes = await fetch(`/api/users/${userId}/digests`);
+      if (histRes.ok) {
+        const hist = await histRes.json();
+        const box = document.getElementById("history");
+        if (!hist.digests.length) {
+          box.innerHTML = "<p class=\"muted\">No digests sent yet.</p>";
+        } else {
+          box.innerHTML = hist.digests.map(d =>
+            `<div class="history-item"><span>${formatDate(d.sent_at)} · ${modeLabel(d.mode)}</span><strong>${d.job_count} jobs</strong></div>`
+          ).join("");
+        }
+      }
+    }
+
+    document.getElementById("profile-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      document.getElementById("form-error").classList.add("hidden");
+      document.getElementById("form-success").classList.add("hidden");
+
+      const body = {
+        location: document.getElementById("location").value,
+        salary_min: Number(document.getElementById("salary_min").value),
+        salary_max: Number(document.getElementById("salary_max").value),
+        target_titles: document.getElementById("target_titles").value,
+        skills: document.getElementById("skills").value,
+        education: document.getElementById("education").value,
+        remote_ok: document.getElementById("remote_ok").checked,
+        include_track_b: document.getElementById("include_track_b").checked,
+      };
+
+      const res = await fetch(`/api/users/${userId}/profile`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        document.getElementById("form-error").textContent = err.detail || "Save failed";
+        document.getElementById("form-error").classList.remove("hidden");
+        return;
+      }
+
+      document.getElementById("form-success").classList.remove("hidden");
+    });
+
+    async function runDigest(top) {
+      const msg = document.getElementById("action-msg");
+      const btnNew = document.getElementById("btn-new");
+      const btnTop = document.getElementById("btn-top");
+      btnNew.disabled = true;
+      btnTop.disabled = true;
+      msg.textContent = "Searching jobs and sending to Telegram… this takes ~1 minute.";
+      msg.classList.remove("hidden");
+
+      try {
+        const res = await fetch(`/api/users/${userId}/run-now?top=${top}`, { method: "POST" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Failed to send digest");
+
+        showAlert(`Digest sent! ${data.kept || 0} jobs matched, ${data.sent || 0} included in message.`);
+        loadDashboard();
+      } catch (ex) {
+        showAlert(ex.message, false);
+      } finally {
+        btnNew.disabled = false;
+        btnTop.disabled = false;
+        msg.classList.add("hidden");
+      }
+    }
+
+    document.getElementById("btn-new").addEventListener("click", () => runDigest(false));
+    document.getElementById("btn-top").addEventListener("click", () => runDigest(true));
+
+    loadDashboard();
+  </script>
+</body>
+</html>

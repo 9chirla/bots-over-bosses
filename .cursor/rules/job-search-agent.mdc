@@ -1,0 +1,30 @@
+---
+description: Daily UK Job Search Agent — project context and build constraints
+alwaysApply: true
+---
+
+# Daily UK Job Search Agent
+
+Python tool: Adzuna API → filter/dedupe → optional LLM score → Telegram digest. Runs daily via GitHub Actions.
+
+## Profile (matching reference — search must cover ALL of this)
+- Location: Ilford, London; Greater London or UK remote
+- Level: entry-level/graduate; no visa sponsorship; UK right to work
+- Salary: £24k–£35k (allow missing salary; full-stack London roles may go slightly higher)
+- Track A — Analytics/business: Data Analyst, Business Analyst, Reporting Analyst, Engagement Officer, CRM, Marketing Coordinator
+- Track B — Full stack (new): Junior/Graduate Developer, Full Stack Developer, Software Developer, Web Developer
+- Skills: Power BI, Excel, CRM campaigns, stakeholder reporting, Python, full-stack (frontend + backend + APIs/databases)
+- Step 2: cast a wide net across BOTH tracks + London + remote; filtering comes later
+
+## Build order
+One step per change. Test after each step. Flag manual setup (API keys, BotFather, GitHub Secrets).
+
+## Code conventions
+- Python 3.11+; `requests` for HTTP; `python-dotenv` for local secrets
+- Never commit secrets; use `.env` locally, GitHub Secrets in CI
+- Keep modules small: `search_jobs.py`, `filters.py`, `dedupe.py`, `score_jobs.py`, `send_digest.py`, `main.py`
+- Plain-language comments; explain errors clearly for a non-technical user
+- Minimal scope per step — do not build ahead of the current phase
+
+## GitHub Actions note
+Local JSON dedupe won't persist between runs — plan cache or committed state in Phase 5.

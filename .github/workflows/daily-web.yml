@@ -1,0 +1,15 @@
+name: Daily UK Job Search (Web App)
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+jobs:
+  run-all-users:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger daily run on deployed server
+        run: |
+          curl -sf -X POST "${{ secrets.PUBLIC_BASE_URL }}/api/cron/run-all" \
+            -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}"

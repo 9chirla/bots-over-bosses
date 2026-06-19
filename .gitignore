@@ -1,0 +1,14 @@
+.env
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+venv/
+seen_jobs.json
+logs/
+*.db
+app/data.db
+outputs/*.docx
+service_account.json
+client_secret.json
+google_token.json

@@ -1,0 +1,59 @@
+name: Daily UK Job Search
+
+on:
+  schedule:
+    # 06:00 UTC daily (06:00 UK in winter / 07:00 UK in summer)
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+jobs:
+  search-and-notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Restore seen jobs cache
+        uses: actions/cache@v4
+        with:
+          path: seen_jobs.json
+          key: seen-jobs-store
+          restore-keys: seen-jobs-store
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Restore Google credential files
+        env:
+          GOOGLE_OAUTH_TOKEN_B64: ${{ secrets.GOOGLE_OAUTH_TOKEN_B64 }}
+          GOOGLE_OAUTH_CLIENT_SECRETS_B64: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRETS_B64 }}
+          GOOGLE_SERVICE_ACCOUNT_JSON_B64: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON_B64 }}
+        run: |
+          if [ -n "$GOOGLE_OAUTH_TOKEN_B64" ]; then
+            echo "$GOOGLE_OAUTH_TOKEN_B64" | base64 -d > google_token.json
+          fi
+          if [ -n "$GOOGLE_OAUTH_CLIENT_SECRETS_B64" ]; then
+            echo "$GOOGLE_OAUTH_CLIENT_SECRETS_B64" | base64 -d > client_secret.json
+          fi
+          if [ -n "$GOOGLE_SERVICE_ACCOUNT_JSON_B64" ]; then
+            echo "$GOOGLE_SERVICE_ACCOUNT_JSON_B64" | base64 -d > service_account.json
+          fi
+
+      - name: Run daily job search (top 20 today)
+        env:
+          ADZUNA_APP_ID: ${{ secrets.ADZUNA_APP_ID }}
+          ADZUNA_APP_KEY: ${{ secrets.ADZUNA_APP_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GOOGLE_DOCS_FOLDER_ID: ${{ secrets.GOOGLE_DOCS_FOLDER_ID }}
+          GOOGLE_SHEETS_ID: ${{ secrets.GOOGLE_SHEETS_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: service_account.json
+          GOOGLE_OAUTH_TOKEN: google_token.json
+          GOOGLE_OAUTH_CLIENT_SECRETS: client_secret.json
+        run: python3 main.py

@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UK Job Alerts — Daily digest to your phone</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <h1>UK Job Alerts</h1>
+    <p class="sub">Tell us what you're looking for. Connect Telegram. Get a scored job digest every morning — no CV portals, no endless scrolling.</p>
+
+    <div id="login-card" class="card">
+      <h2>Already signed up?</h2>
+      <form id="login-form">
+        <label for="login-email">Email</label>
+        <input id="login-email" type="email" required placeholder="you@example.com" />
+        <button type="submit" class="secondary">Go to my dashboard</button>
+        <p id="login-error" class="error hidden"></p>
+      </form>
+    </div>
+
+    <div id="form-card" class="card">
+      <h2>New sign up</h2>
+      <form id="signup-form">
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" required placeholder="you@example.com" />
+
+        <label for="location">Preferred location</label>
+        <input id="location" name="location" value="London" required />
+
+        <div class="row">
+          <div>
+            <label for="salary_min">Min salary (£)</label>
+            <input id="salary_min" name="salary_min" type="number" value="24000" min="15000" />
+          </div>
+          <div>
+            <label for="salary_max">Max salary (£)</label>
+            <input id="salary_max" name="salary_max" type="number" value="35000" min="15000" />
+          </div>
+        </div>
+
+        <label for="target_titles">Target job titles (comma separated)</label>
+        <input id="target_titles" name="target_titles" value="Data Analyst, Business Analyst, Junior Developer, Full Stack Developer" />
+
+        <label for="skills">Key skills (comma separated)</label>
+        <input id="skills" name="skills" value="Power BI, Excel, CRM, Python, JavaScript, SQL" />
+
+        <label for="education">Education (optional — helps AI scoring)</label>
+        <textarea id="education" name="education" placeholder="MBA, University of East London, 2025"></textarea>
+
+        <label class="check">
+          <input id="remote_ok" name="remote_ok" type="checkbox" checked />
+          Include UK remote jobs
+        </label>
+
+        <label class="check">
+          <input id="include_track_b" name="include_track_b" type="checkbox" checked />
+          Include developer / full-stack roles
+        </label>
+
+        <button type="submit">Save & connect Telegram</button>
+        <p id="form-error" class="error hidden"></p>
+      </form>
+    </div>
+
+    <div id="connect-card" class="card hidden">
+      <p class="success">Profile saved!</p>
+      <p class="steps">
+        <strong>Last step:</strong> tap the button below to open Telegram, then press <strong>Start</strong>.
+        We'll link your account automatically.
+      </p>
+      <a id="telegram-link" class="telegram-btn" href="#" target="_blank">Connect Telegram</a>
+      <div id="status" class="status">Waiting for you to press Start in Telegram…</div>
+    </div>
+
+    <div id="done-card" class="card hidden">
+      <p class="success">All set!</p>
+      <p class="steps">
+        Telegram is connected. You'll receive a daily job digest each morning with the best matches for your profile.
+      </p>
+      <a id="dashboard-link" class="btn" href="#">Open dashboard</a>
+    </div>
+  </div>
+
+  <script>
+    let userId = null;
+    let pollTimer = null;
+
+    document.getElementById("login-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const err = document.getElementById("login-error");
+      err.classList.add("hidden");
+
+      const email = document.getElementById("login-email").value;
+      try {
+        const res = await fetch("/api/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Login failed");
+        localStorage.setItem("jobalert_user_id", data.user_id);
+        location.href = `/dashboard?user=${data.user_id}`;
+      } catch (ex) {
+        err.textContent = ex.message;
+        err.classList.remove("hidden");
+      }
+    });
+
+    document.getElementById("signup-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const err = document.getElementById("form-error");
+      err.classList.add("hidden");
+
+      const body = {
+        email: document.getElementById("email").value,
+        location: document.getElementById("location").value,
+        salary_min: Number(document.getElementById("salary_min").value),
+        salary_max: Number(document.getElementById("salary_max").value),
+        target_titles: document.getElementById("target_titles").value,
+        skills: document.getElementById("skills").value,
+        education: document.getElementById("education").value,
+        remote_ok: document.getElementById("remote_ok").checked,
+        include_track_b: document.getElementById("include_track_b").checked,
+      };
+
+      try {
+        const res = await fetch("/api/signup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Sign up failed");
+
+        userId = data.user_id;
+        localStorage.setItem("jobalert_user_id", userId);
+        document.getElementById("form-card").classList.add("hidden");
+        document.getElementById("login-card").classList.add("hidden");
+        document.getElementById("connect-card").classList.remove("hidden");
+        document.getElementById("telegram-link").href = data.telegram_link;
+        document.getElementById("dashboard-link").href = `/dashboard?user=${userId}`;
+        startPolling();
+      } catch (ex) {
+        err.textContent = ex.message;
+        err.classList.remove("hidden");
+      }
+    });
+
+    function startPolling() {
+      pollTimer = setInterval(checkStatus, 3000);
+      checkStatus();
+    }
+
+    async function checkStatus() {
+      if (!userId) return;
+      const res = await fetch(`/api/users/${userId}/status`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.telegram_linked) {
+        clearInterval(pollTimer);
+        document.getElementById("connect-card").classList.add("hidden");
+        document.getElementById("done-card").classList.remove("hidden");
+      }
+    }
+
+    const saved = localStorage.getItem("jobalert_user_id");
+    if (saved) {
+      document.getElementById("dashboard-link")?.setAttribute("href", `/dashboard?user=${saved}`);
+    }
+  </script>
+</body>
+</html>
