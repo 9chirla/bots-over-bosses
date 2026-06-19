@@ -11,7 +11,7 @@ from pydantic import BaseModel, EmailStr, Field
 
 from app import config, database
 from pipeline import run_pipeline
-from user_profile import UserProfile
+from user_profile import UserProfile, profile_from_form
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
@@ -44,11 +44,14 @@ class SignupRequest(BaseModel):
     email: EmailStr
     location: str = "London"
     remote_ok: bool = True
-    salary_min: int = Field(24000, ge=15000, le=100000)
-    salary_max: int = Field(35000, ge=15000, le=150000)
+    salary_min: int = Field(20_000, ge=15_000, le=100_000)
+    salary_max: int = Field(45_000, ge=15_000, le=150_000)
     education: str = ""
+    level: str = ""
     skills: str = "Power BI, Excel, CRM, Python, JavaScript, SQL"
     target_titles: str = "Data Analyst, Business Analyst, Junior Developer, Full Stack Developer"
+    track_a_queries: str = ""
+    track_b_queries: str = ""
     include_track_b: bool = True
 
 
@@ -64,24 +67,37 @@ class LoginRequest(BaseModel):
 class ProfileUpdateRequest(BaseModel):
     location: str = "London"
     remote_ok: bool = True
-    salary_min: int = Field(24000, ge=15000, le=100000)
-    salary_max: int = Field(35000, ge=15000, le=150000)
+    salary_min: int = Field(20_000, ge=15_000, le=100_000)
+    salary_max: int = Field(45_000, ge=15_000, le=150_000)
     education: str = ""
+    level: str = ""
     skills: str = "Power BI, Excel, CRM, Python, JavaScript, SQL"
     target_titles: str = "Data Analyst, Business Analyst, Junior Developer, Full Stack Developer"
+    track_a_queries: str = ""
+    track_b_queries: str = ""
     include_track_b: bool = True
 
 
+def _split_csv(value: str) -> list[str]:
+    return [part.strip() for part in value.split(",") if part.strip()]
+
+
 def _profile_from_form(email: str, body: SignupRequest | ProfileUpdateRequest) -> UserProfile:
-    return UserProfile(
-        email=email,
-        location=body.location.strip(),
+    target_titles = _split_csv(body.target_titles)
+    track_a = _split_csv(body.track_a_queries)
+    track_b = _split_csv(body.track_b_queries)
+    return profile_from_form(
+        email,
+        location=body.location,
         remote_ok=body.remote_ok,
         salary_min=body.salary_min,
         salary_max=body.salary_max,
-        education=body.education.strip(),
-        skills=[s.strip() for s in body.skills.split(",") if s.strip()],
-        target_titles=[t.strip() for t in body.target_titles.split(",") if t.strip()],
+        education=body.education,
+        level=body.level,
+        skills=_split_csv(body.skills),
+        target_titles=target_titles,
+        track_a_queries=track_a or None,
+        track_b_queries=track_b or None,
         include_track_b=body.include_track_b,
     )
 

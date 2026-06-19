@@ -111,11 +111,39 @@ scripts/             GitHub secrets setup, local cron helpers
 app/                 Optional FastAPI web app (multi-user)
 ```
 
-## Candidate profile
+## Your job search preferences
 
-Edit `config/resume.txt` for your base CV. Filtering and scoring logic live in `filters.py`, `user_profile.py`, and `score_jobs.py`.
+Each user configures **what roles to target** — this drives Adzuna searches, filtering, and AI scoring.
 
-Default target: entry-level / graduate roles in London or UK remote — Business Analyst, Data Analyst, CRM, Marketing Coordinator, Junior Developer tracks. Salary band £20k–£45k.
+### CLI / GitHub Actions (single user)
+
+Edit `config/profile.json` (created automatically on first run from `config/profile.example.json`):
+
+```bash
+cp config/profile.example.json config/profile.json   # or just run main.py once
+```
+
+Key fields:
+
+| Field | What it controls |
+|-------|------------------|
+| `target_titles` | Roles you want (shown in scoring prompt) |
+| `track_a_queries` / `track_b_queries` | Adzuna search keywords |
+| `skills` | Filter matching + AI scoring |
+| `salary_min` / `salary_max` | Salary filter (£) |
+| `location` / `remote_ok` | Where to search |
+| `level` / `education` | AI scoring context |
+
+Friends using the repo copy `profile.example.json` → `profile.json` and edit their own targets.  
+For GitHub Actions, commit your personal `profile.json` or keep it local and use the example defaults in CI.
+
+### Web app (multiple users)
+
+Sign up at `/` — each user sets preferences in the dashboard. Stored per user in SQLite.
+
+### Base CV
+
+Edit `config/resume.txt` for tailored CV/cover letter generation.
 
 ## Troubleshooting
 

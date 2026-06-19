@@ -11,6 +11,7 @@ import argparse
 import sys
 
 from pipeline import run_pipeline
+from user_profile import ensure_profile_file, load_profile
 
 
 def main():
@@ -22,7 +23,11 @@ def main():
     )
     args = parser.parse_args()
 
+    ensure_profile_file()
+    profile = load_profile()
+
     run_pipeline(
+        profile=profile,
         send_telegram=not args.no_telegram,
         print_jobs=True,
         use_db_dedupe=False,

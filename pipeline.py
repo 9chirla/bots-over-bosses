@@ -123,6 +123,9 @@ def run_pipeline(
     Run search → filter today's jobs → score → top 20 digest.
     Returns a summary dict for logging/API responses.
     """
+    from user_profile import load_profile
+
+    profile = profile or load_profile()
     app_id, app_key = load_credentials()
     all_jobs = fetch_all_jobs(app_id, app_key, profile=profile)
 

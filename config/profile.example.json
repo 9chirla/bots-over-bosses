@@ -1,0 +1,46 @@
+{
+  "email": "",
+  "location": "London",
+  "remote_ok": true,
+  "salary_min": 20000,
+  "salary_max": 45000,
+  "education": "MBA (University of East London, 2025), BBA (India)",
+  "level": "entry-level / graduate; full UK right to work; no visa sponsorship needed",
+  "track_a_queries": [
+    "data analyst",
+    "business analyst",
+    "reporting analyst",
+    "engagement officer",
+    "crm",
+    "marketing coordinator"
+  ],
+  "track_b_queries": [
+    "junior developer",
+    "graduate developer",
+    "full stack developer",
+    "software developer",
+    "web developer"
+  ],
+  "skills": [
+    "Power BI",
+    "Excel",
+    "CRM",
+    "stakeholder reporting",
+    "Python",
+    "JavaScript",
+    "React",
+    "SQL"
+  ],
+  "target_titles": [
+    "Data Analyst",
+    "Business Analyst",
+    "Reporting Analyst",
+    "Engagement Officer",
+    "CRM Executive",
+    "Marketing Coordinator",
+    "Junior Developer",
+    "Full Stack Developer",
+    "Web Developer"
+  ],
+  "include_track_b": true
+}

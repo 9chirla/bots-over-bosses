@@ -48,11 +48,20 @@
         <label for="target_titles">Target job titles</label>
         <input id="target_titles" name="target_titles" />
 
+        <label for="track_a_queries">Search terms — analytics / business</label>
+        <input id="track_a_queries" name="track_a_queries" />
+
+        <label for="track_b_queries">Search terms — developer roles</label>
+        <input id="track_b_queries" name="track_b_queries" />
+
         <label for="skills">Key skills</label>
         <input id="skills" name="skills" />
 
         <label for="education">Education</label>
         <textarea id="education" name="education"></textarea>
+
+        <label for="level">Career level</label>
+        <input id="level" name="level" />
 
         <label class="check">
           <input id="remote_ok" name="remote_ok" type="checkbox" />
@@ -119,8 +128,11 @@
       document.getElementById("salary_min").value = p.salary_min;
       document.getElementById("salary_max").value = p.salary_max;
       document.getElementById("target_titles").value = p.target_titles;
+      document.getElementById("track_a_queries").value = p.track_a_queries || "";
+      document.getElementById("track_b_queries").value = p.track_b_queries || "";
       document.getElementById("skills").value = p.skills;
       document.getElementById("education").value = p.education || "";
+      document.getElementById("level").value = p.level || "";
       document.getElementById("remote_ok").checked = p.remote_ok;
       document.getElementById("include_track_b").checked = p.include_track_b;
 
@@ -158,8 +170,11 @@
         salary_min: Number(document.getElementById("salary_min").value),
         salary_max: Number(document.getElementById("salary_max").value),
         target_titles: document.getElementById("target_titles").value,
+        track_a_queries: document.getElementById("track_a_queries").value,
+        track_b_queries: document.getElementById("track_b_queries").value,
         skills: document.getElementById("skills").value,
         education: document.getElementById("education").value,
+        level: document.getElementById("level").value,
         remote_ok: document.getElementById("remote_ok").checked,
         include_track_b: document.getElementById("include_track_b").checked,
       };

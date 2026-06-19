@@ -11,7 +11,7 @@ import time
 import requests
 from dotenv import load_dotenv
 
-from user_profile import UserProfile
+from user_profile import UserProfile, load_profile
 
 DEEPSEEK_URL = "https://api.deepseek.com/chat/completions"
 DEEPSEEK_MODEL = "deepseek-chat"
@@ -19,19 +19,7 @@ MAX_JOBS_TO_SCORE = 50
 DESCRIPTION_LIMIT = 900
 REQUEST_DELAY_SECONDS = 0.5
 
-PROFILE_SUMMARY = """
-Candidate profile:
-- Location: Ilford, London — open to Greater London or UK remote
-- Education: MBA (University of East London, 2025), BBA (India)
-- Level: entry-level / graduate; full UK right to work; no visa sponsorship needed
-- Salary target: £20,000–£45,000
-- Track A (analytics/business): Data Analyst, Business Analyst, Reporting Analyst,
-  Engagement Officer, CRM, Marketing Campaign Coordinator
-- Track B (full stack): Junior/Graduate Developer, Full Stack Developer, Web Developer
-- Skills: Power BI, Excel, CRM campaigns, stakeholder reporting, Python, full-stack dev
-- Avoid: senior/lead roles, paid training bootcamp schemes disguised as jobs,
-  unrelated engineering (civil/mechanical), sales-only roles with no analyst/dev work
-""".strip()
+PROFILE_SUMMARY = load_profile().llm_summary()
 
 
 def load_api_key():

@@ -33,22 +33,31 @@
         <div class="row">
           <div>
             <label for="salary_min">Min salary (£)</label>
-            <input id="salary_min" name="salary_min" type="number" value="24000" min="15000" />
+            <input id="salary_min" name="salary_min" type="number" value="20000" min="15000" />
           </div>
           <div>
             <label for="salary_max">Max salary (£)</label>
-            <input id="salary_max" name="salary_max" type="number" value="35000" min="15000" />
+            <input id="salary_max" name="salary_max" type="number" value="45000" min="15000" />
           </div>
         </div>
 
         <label for="target_titles">Target job titles (comma separated)</label>
         <input id="target_titles" name="target_titles" value="Data Analyst, Business Analyst, Junior Developer, Full Stack Developer" />
 
+        <label for="track_a_queries">Search terms — analytics / business (comma separated)</label>
+        <input id="track_a_queries" name="track_a_queries" placeholder="business analyst, crm, marketing coordinator" />
+
+        <label for="track_b_queries">Search terms — developer roles (comma separated)</label>
+        <input id="track_b_queries" name="track_b_queries" placeholder="junior developer, full stack developer" />
+
         <label for="skills">Key skills (comma separated)</label>
         <input id="skills" name="skills" value="Power BI, Excel, CRM, Python, JavaScript, SQL" />
 
         <label for="education">Education (optional — helps AI scoring)</label>
         <textarea id="education" name="education" placeholder="MBA, University of East London, 2025"></textarea>
+
+        <label for="level">Career level (optional — helps filtering & scoring)</label>
+        <input id="level" name="level" placeholder="entry-level graduate, full UK right to work" />
 
         <label class="check">
           <input id="remote_ok" name="remote_ok" type="checkbox" checked />
@@ -121,8 +130,11 @@
         salary_min: Number(document.getElementById("salary_min").value),
         salary_max: Number(document.getElementById("salary_max").value),
         target_titles: document.getElementById("target_titles").value,
+        track_a_queries: document.getElementById("track_a_queries").value,
+        track_b_queries: document.getElementById("track_b_queries").value,
         skills: document.getElementById("skills").value,
         education: document.getElementById("education").value,
+        level: document.getElementById("level").value,
         remote_ok: document.getElementById("remote_ok").checked,
         include_track_b: document.getElementById("include_track_b").checked,
       };

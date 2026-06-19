@@ -12,3 +12,4 @@ outputs/*.docx
 service_account.json
 client_secret.json
 google_token.json
+config/profile.json

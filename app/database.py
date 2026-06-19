@@ -229,4 +229,6 @@ def profile_to_api(user_id: str, db_path: str = DEFAULT_DB_PATH) -> dict | None:
     data = profile.to_dict()
     data["skills"] = ", ".join(profile.skills)
     data["target_titles"] = ", ".join(profile.target_titles)
+    data["track_a_queries"] = ", ".join(profile.track_a_queries)
+    data["track_b_queries"] = ", ".join(profile.track_b_queries)
     return data
