@@ -36,6 +36,10 @@ HARD_DISQUALIFIERS = [
     "counter terrorist check",
 ]
 
+# Roughly 15–20% above a typical entry-level salary_max — used with 1.5x multiplier
+# in exceeds_seniority_signal() so only clearly senior bands are skipped.
+SALARY_SENIORITY_CEILING = 55_000
+
 PROFILE_SUMMARY = load_profile().llm_summary()
 
 
@@ -84,6 +88,70 @@ def filter_clearance_disqualified(jobs: list) -> tuple[list, int]:
             eligible.append(job)
 
     return eligible, skipped
+
+
+def exceeds_seniority_signal(
+    job: dict,
+    candidate_salary_max: int,
+    ceiling_multiplier: float = 1.5,
+) -> bool:
+    """
+    Return True if the job's salary strongly implies seniority above an
+    entry-level candidate's target range, regardless of title wording.
+    """
+    salary_max = job.get("salary_max") or job.get("salary_min")
+    if not salary_max:
+        return False
+
+    ceiling = candidate_salary_max * ceiling_multiplier
+    return float(salary_max) > ceiling
+
+
+def _candidate_salary_max(profile: UserProfile | None) -> int:
+    if profile is not None:
+        return profile.salary_max
+    return load_profile().salary_max
+
+
+def filter_pre_scoring(jobs: list, profile: UserProfile | None = None) -> tuple[list, dict]:
+    """
+    Remove clearance and salary-seniority mismatches before scoring.
+    Returns (eligible_jobs, skip_stats).
+    """
+    candidate_salary_max = _candidate_salary_max(profile)
+    eligible: list = []
+    clearance_skipped = 0
+    seniority_skipped = 0
+
+    for job in jobs:
+        company = (
+            job.get("company", {}).get("display_name", "Unknown")
+            if isinstance(job.get("company"), dict)
+            else job.get("company", "Unknown")
+        )
+
+        if is_clearance_disqualified(job):
+            clearance_skipped += 1
+            print(f"Skipped (clearance required): {job.get('title', 'Untitled')} at {company}")
+            continue
+
+        if exceeds_seniority_signal(job, candidate_salary_max):
+            seniority_skipped += 1
+            salary_max = job.get("salary_max") or job.get("salary_min")
+            ceiling = candidate_salary_max * 1.5
+            print(
+                f"Skipped (salary implies senior role, £{int(salary_max):,} vs "
+                f"target ceiling £{ceiling:,.0f}): {job.get('title', 'Untitled')} at {company}"
+            )
+            continue
+
+        eligible.append(job)
+
+    stats = {
+        "jobs_skipped_clearance": clearance_skipped,
+        "jobs_skipped_seniority_mismatch": seniority_skipped,
+    }
+    return eligible, stats
 
 
 def _build_prompt(job, profile_summary: str):
@@ -190,17 +258,20 @@ def score_job(job, api_key, profile_summary: str):
 def score_jobs(jobs, api_key=None, max_jobs=MAX_JOBS_TO_SCORE, profile: UserProfile | None = None):
     """
     Score up to max_jobs listings. Adds _score and _score_reason to each job.
-    Returns (jobs_sorted, stats) where stats includes jobs_skipped_clearance.
-    Clearance-disqualified jobs are removed entirely — never scored or digested.
+    Returns (jobs_sorted, stats) where stats includes pre-scoring skip counts.
+    Clearance and seniority-mismatch jobs are removed entirely before scoring.
     """
     api_key = api_key or load_api_key()
     profile_summary = profile.llm_summary() if profile else PROFILE_SUMMARY
 
-    eligible, clearance_skipped = filter_clearance_disqualified(jobs)
-    stats = {"jobs_skipped_clearance": clearance_skipped}
+    eligible, stats = filter_pre_scoring(jobs, profile=profile)
 
-    if clearance_skipped:
-        print(f"Clearance filter: {clearance_skipped} job(s) removed before scoring.\n")
+    total_skipped = stats["jobs_skipped_clearance"] + stats["jobs_skipped_seniority_mismatch"]
+    if total_skipped:
+        print(
+            f"Pre-scoring filters: {stats['jobs_skipped_clearance']} clearance, "
+            f"{stats['jobs_skipped_seniority_mismatch']} seniority salary mismatch.\n"
+        )
 
     if not api_key:
         print("No DEEPSEEK_API_KEY in .env — skipping LLM scoring.")

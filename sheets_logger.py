@@ -198,7 +198,9 @@ RUN_LOG_HEADER = [
     "jobs_ranked",
     "jobs_sent",
     "jobs_skipped_clearance",
+    "jobs_skipped_seniority_mismatch",
     "jobs_skipped_dead_link",
+    "jobs_skipped_domain_mismatch",
     "user_email",
 ]
 
@@ -243,7 +245,9 @@ def log_run_summary(summary: dict, user_email: str | None = None):
                 summary.get("ranked", 0),
                 summary.get("sent", 0),
                 summary.get("jobs_skipped_clearance", 0),
+                summary.get("jobs_skipped_seniority_mismatch", 0),
                 summary.get("jobs_skipped_dead_link", 0),
+                summary.get("jobs_skipped_domain_mismatch", 0),
                 user_email or "cli",
             ],
             value_input_option="USER_ENTERED",

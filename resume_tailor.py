@@ -48,6 +48,18 @@ def has_placeholders(text: str) -> bool:
     return any(re.search(pattern, text, re.IGNORECASE) for pattern in PLACEHOLDER_PATTERNS)
 
 
+def _parse_domain_mismatch(content: str) -> tuple[bool, str]:
+    """Return (is_mismatch, reason) if the LLM flagged an incompatible domain."""
+    if not re.search(r"DOMAIN_MISMATCH_FLAG:\s*true", content, re.IGNORECASE):
+        return False, ""
+
+    reason_match = re.search(r"REASON:\s*(.+)", content, re.IGNORECASE | re.DOTALL)
+    if reason_match:
+        reason = reason_match.group(1).strip().splitlines()[0].strip()
+        return True, reason or "Domain mismatch — no credible bridge to required industry."
+    return True, "Domain mismatch — no credible bridge to required industry."
+
+
 def _clean_llm_resume(text: str) -> str:
     """Remove AI preamble and ATS notes — keep only the resume body."""
     if "--- ATS NOTES" in text:
@@ -117,6 +129,41 @@ You know exactly why good candidates get rejected:
 Your job is to rewrite this candidate's resume for the specific job
 below. The output must make a hiring manager pause and read properly —
 not skim and move on.
+
+═══════════════════════════════════════════════
+DOMAIN COMPATIBILITY CHECK — perform this before writing anything:
+═══════════════════════════════════════════════
+
+Compare the job's required domain (industry, function, technical
+discipline) against the candidate's actual work history domains.
+
+If the job is in a SPECIALISED REGULATED INDUSTRY the candidate has
+zero direct or adjacent experience in — examples: investment banking,
+trading operations, payments/fintech infrastructure, healthcare
+clinical roles, legal practice, pharmaceutical regulatory affairs,
+aerospace/defence engineering — and the candidate's background has no
+genuine bridge to it (not even via transferable skills with a credible
+story), do NOT write a tailored resume claiming relevance.
+
+Instead, output exactly this in place of the resume:
+
+DOMAIN_MISMATCH_FLAG: true
+REASON: [One sentence explaining the specific gap — e.g. 'This role
+requires direct sales and trading or payments industry experience;
+candidate's background is in graduate engagement and data analysis
+with no financial services exposure, and the stated salary band
+confirms this is a specialist-level hire, not an entry point.']
+
+Do not attempt to write a tailored resume for jobs flagged this way.
+A resume cannot manufacture domain credibility that doesn't exist, and
+attempting to do so produces a CV that reads as inauthentic to any
+experienced hiring manager in that field, which damages the candidate's
+credibility for every future application from the same CV style if
+they reuse phrasing patterns.
+
+If the domain gap is merely adjacent/transferable (not zero bridge),
+proceed with the rewrite using honest Problem 11 framing — only use
+DOMAIN_MISMATCH_FLAG for genuinely incompatible specialised industries.
 
 ═══════════════════════════════════════════════
 THE 11 PROBLEMS YOU MUST FIX IN THIS RESUME:
@@ -337,7 +384,7 @@ CANDIDATE BASE RESUME:
 {base_resume_text[:3500]}
 
 NOW OUTPUT THE FULL REWRITTEN RESUME. FOLLOW EVERY RULE ABOVE.
-DO NOT SKIP ANY OF THE 10 PROBLEMS. DO NOT USE AI PHRASES.
+DO NOT SKIP ANY OF THE 11 PROBLEMS. DO NOT USE AI PHRASES.
 """
 
     try:
@@ -349,6 +396,17 @@ DO NOT SKIP ANY OF THE 10 PROBLEMS. DO NOT USE AI PHRASES.
             max_tokens=2500,
         )
         content = response.choices[0].message.content.strip()
+        mismatch, reason = _parse_domain_mismatch(content)
+        if mismatch:
+            company = (
+                job.get("company", {}).get("display_name", "Unknown")
+                if isinstance(job.get("company"), dict)
+                else job.get("company", "Unknown")
+            )
+            print(f"Skipped tailoring (domain mismatch): {title} at {company} — {reason}")
+            job["_domain_mismatch"] = True
+            job["_domain_mismatch_reason"] = reason
+            return None
         cleaned = _clean_llm_resume(content)
         if has_placeholders(cleaned):
             print(f"Resume tailoring rejected placeholder output for '{title}'.")

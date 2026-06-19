@@ -76,10 +76,11 @@ def _print_jobs(ranked):
         print()
 
 
-def _log_and_tailor(ranked: list, user_email: str | None = None) -> int:
-    """Google Sheets logging and resume tailoring for top 5 jobs. Returns dead-link skip count."""
+def _log_and_tailor(ranked: list, user_email: str | None = None) -> dict:
+    """Google Sheets logging and resume tailoring for top 5 jobs."""
+    stats = {"jobs_skipped_dead_link": 0, "jobs_skipped_domain_mismatch": 0}
     if not ranked:
-        return 0
+        return stats
 
     if sheets_logger:
         result = sheets_logger.log_jobs_to_sheets(ranked, user_email=user_email)
@@ -87,27 +88,27 @@ def _log_and_tailor(ranked: list, user_email: str | None = None) -> int:
             print(f"Google Sheets: {result['rows_added']} rows added, {result['duplicates_skipped']} duplicates skipped.")
 
     if not resume_tailor or not getattr(resume_tailor, "TAILOR_ENABLED", False):
-        return 0
+        return stats
 
     if not RESUME_PATH.exists():
         print("Skipping resume tailoring: config/resume.txt not found")
-        return 0
+        return stats
 
     base_resume = RESUME_PATH.read_text(encoding="utf-8").strip()
     if not base_resume:
         print("Skipping resume tailoring: config/resume.txt is empty")
-        return 0
+        return stats
 
     if resume_tailor.has_placeholders(base_resume):
         print("Skipping resume tailoring: config/resume.txt still has placeholder text like [YOUR NAME].")
-        return 0
+        return stats
 
     scored = [j for j in ranked if j.get("_score") is not None]
     scored.sort(key=lambda j: j["_score"], reverse=True)
     top_five = scored[:TOP_CV_COUNT]
 
     if not top_five:
-        return 0
+        return stats
 
     from link_checker import is_job_likely_live
 
@@ -136,13 +137,20 @@ def _log_and_tailor(ranked: list, user_email: str | None = None) -> int:
 
     if not live_jobs:
         print("No live listings in top 5 — skipping resume tailoring.\n")
-        return skipped_dead_count
+        stats["jobs_skipped_dead_link"] = skipped_dead_count
+        return stats
 
     print(f"Tailoring resumes and cover letters for top {len(live_jobs)} jobs...\n")
     cv_urls = {}
+    domain_skipped = 0
 
     for job in live_jobs:
         tailored = resume_tailor.tailor_resume(base_resume, job)
+        if job.get("_domain_mismatch"):
+            domain_skipped += 1
+            job["tailored_cv_url"] = ""
+            job["cover_letter_url"] = ""
+            continue
         if tailored is None:
             job["tailored_cv_url"] = ""
         else:
@@ -164,7 +172,9 @@ def _log_and_tailor(ranked: list, user_email: str | None = None) -> int:
     if cv_urls and sheets_logger:
         sheets_logger.update_cv_urls(cv_urls)
 
-    return skipped_dead_count
+    stats["jobs_skipped_dead_link"] = skipped_dead_count
+    stats["jobs_skipped_domain_mismatch"] = domain_skipped
+    return stats
 
 
 def run_pipeline(
@@ -186,6 +196,7 @@ def run_pipeline(
     profile = profile or load_profile()
     app_id, app_key = load_credentials()
     skipped_dead_link = 0
+    skipped_domain_mismatch = 0
 
     adzuna_jobs = fetch_all_jobs(app_id, app_key, profile=profile)
 
@@ -229,7 +240,15 @@ def run_pipeline(
                     chat_id=resolved,
                     empty_reason="No jobs posted in the last 24 hours on Adzuna.",
                 )
-        return {"fetched": 0, "kept": 0, "sent": 0, "jobs_skipped_dead_link": 0}
+        return {
+            "fetched": 0,
+            "kept": 0,
+            "sent": 0,
+            "jobs_skipped_dead_link": 0,
+            "jobs_skipped_domain_mismatch": 0,
+            "jobs_skipped_seniority_mismatch": 0,
+            "jobs_skipped_clearance": 0,
+        }
 
     today_jobs = filter_jobs_posted_today(all_jobs)
     print(
@@ -255,15 +274,20 @@ def run_pipeline(
     if kept:
         ranked, score_stats = score_jobs(kept, profile=profile, max_jobs=score_limit)
     else:
-        ranked, score_stats = [], {"jobs_skipped_clearance": 0}
+        ranked, score_stats = [], {
+            "jobs_skipped_clearance": 0,
+            "jobs_skipped_seniority_mismatch": 0,
+        }
     ranked = ranked[:TOP_DAILY_MATCHES]
 
     if ranked:
         print(f"Sending top {len(ranked)} matches (max {TOP_DAILY_MATCHES})\n")
 
-    skipped_dead_link = _log_and_tailor(
+    tailor_stats = _log_and_tailor(
         ranked, user_email=user_email or (profile.email if profile else None)
     )
+    skipped_dead_link = tailor_stats.get("jobs_skipped_dead_link", 0)
+    skipped_domain_mismatch = tailor_stats.get("jobs_skipped_domain_mismatch", 0)
 
     digest_title = f"UK Jobs — Top {TOP_DAILY_MATCHES} today"
 
@@ -322,7 +346,9 @@ def run_pipeline(
         "ranked": len(ranked),
         "sent": sent_count,
         "jobs_skipped_clearance": score_stats.get("jobs_skipped_clearance", 0),
+        "jobs_skipped_seniority_mismatch": score_stats.get("jobs_skipped_seniority_mismatch", 0),
         "jobs_skipped_dead_link": skipped_dead_link,
+        "jobs_skipped_domain_mismatch": skipped_domain_mismatch,
     }
 
     if sheets_logger:
